@@ -61,6 +61,7 @@ int process_file(FILE* f)
 	char buf[BUFSIZ];
 
 	int had_content_disposition;
+	int no_output;
 	FILE* outf;
 
 	size_t file_size, buf_filled;
@@ -101,6 +102,7 @@ int process_file(FILE* f)
 	while (1)
 	{
 		had_content_disposition = 0;
+		no_output = 0;
 
 		/* read headers */
 		while (1)
@@ -153,7 +155,7 @@ int process_file(FILE* f)
 					len = strcspn(p, "\"");
 
 					if (len == 0)
-						outf = NULL;
+						no_output = 1;
 					else
 					{
 						fnbuf = malloc(len + 10);
@@ -221,7 +223,7 @@ int process_file(FILE* f)
 			if (ferror(f))
 			{
 				fprintf(stderr, "Read error: %s\n", strerror(errno));
-				if (outf)
+				if (!no_output)
 					fclose(outf);
 				return 1;
 			}
@@ -242,7 +244,7 @@ int process_file(FILE* f)
 
 			if (wn > 0)
 			{
-				if (!outf)
+				if (no_output)
 				{
 					fprintf(stderr, "Non-empty data when empty file expected\n");
 					return 1;
@@ -268,14 +270,15 @@ int process_file(FILE* f)
 				{
 					fprintf(stderr, "fseek() failed: %s\n",
 							strerror(errno));
-					fclose(outf);
+					if (!no_output)
+						fclose(outf);
 					return 1;
 				}
 				break;
 			}
 		}
 
-		if (outf)
+		if (!no_output)
 		{
 			fclose(outf);
 			fprintf(stderr, " %zu\n", file_size);
