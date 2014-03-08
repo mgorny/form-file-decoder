@@ -17,19 +17,24 @@
 const int not_reached = 0;
 
 int file_no = 0;
+int list_only = 0;
 
 struct option opts[] = {
+	{ "list", no_argument, NULL, 'l' },
+
 	{ "help", no_argument, NULL, 'h' },
 	{ "version", no_argument, NULL, 'V' },
 
 	{ NULL, 0, NULL, 0 }
 };
 
-const char* opts_short = "hV";
+const char* opts_short = "lhV";
 
 const char* help_msg = "Usage: %s [<options>] <file>...\n"
 	"\n"
 	"Options:\n"
+	" -l, --list            list files without extracting them\n"
+	"\n"
 	" -h, --help            this help message\n"
 	" -V, --version         program version\n";
 
@@ -145,7 +150,8 @@ int process_file(FILE* f)
 					sprintf(fnbuf, "unnamed.%08x", file_no++);
 
 					fprintf(stderr, "%s ...", fnbuf);
-					outf = fopen(fnbuf, "wb");
+					if (!list_only)
+						outf = fopen(fnbuf, "wb");
 				}
 				else
 				{
@@ -168,7 +174,7 @@ int process_file(FILE* f)
 						fnbuf[len] = 0;
 
 						/* find a unique name */
-						if (access(fnbuf, F_OK) == 0)
+						if (!list_only && access(fnbuf, F_OK) == 0)
 						{
 							char* post_fnbuf = fnbuf + len;
 							int i = 0;
@@ -181,7 +187,8 @@ int process_file(FILE* f)
 						}
 
 						fprintf(stderr, "%s ...", fnbuf);
-						outf = fopen(fnbuf, "wb");
+						if (!list_only)
+							outf = fopen(fnbuf, "wb");
 
 						free(fnbuf);
 					}
@@ -223,7 +230,7 @@ int process_file(FILE* f)
 			if (ferror(f))
 			{
 				fprintf(stderr, "Read error: %s\n", strerror(errno));
-				if (!no_output)
+				if (!no_output && !list_only)
 					fclose(outf);
 				return 1;
 			}
@@ -250,12 +257,18 @@ int process_file(FILE* f)
 					return 1;
 				}
 
-				wr = fwrite(buf, 1, wn, outf);
-				if (wr == 0)
+				if (!list_only)
 				{
-					fprintf(stderr, "fwrite() failed: %s\n", strerror(errno));
-					return 1;
+
+					wr = fwrite(buf, 1, wn, outf);
+					if (wr == 0)
+					{
+						fprintf(stderr, "fwrite() failed: %s\n", strerror(errno));
+						return 1;
+					}
 				}
+				else /* list_only */
+					wr = wn;
 
 				file_size += wr;
 				buf_filled -= wr;
@@ -270,7 +283,7 @@ int process_file(FILE* f)
 				{
 					fprintf(stderr, "fseek() failed: %s\n",
 							strerror(errno));
-					if (!no_output)
+					if (!no_output && !list_only)
 						fclose(outf);
 					return 1;
 				}
@@ -280,7 +293,8 @@ int process_file(FILE* f)
 
 		if (!no_output)
 		{
-			fclose(outf);
+			if (!list_only)
+				fclose(outf);
 			fprintf(stderr, " %zu\n", file_size);
 		}
 
@@ -318,6 +332,10 @@ int main(int argc, char* argv[])
 	{
 		switch (opt)
 		{
+			case 'l':
+				list_only = 1;
+				break;
+
 			case 'V':
 				printf("form-file-decoder 0\n");
 				return 0;
