@@ -1,3 +1,9 @@
+/**
+ * form-file-decoder
+ * (c) 2014 Michał Górny
+ * 2-clause BSD license
+ */
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -6,9 +12,9 @@
 #include <unistd.h>
 #include <assert.h>
 
-int file_no = 0;
+const int not_reached = 0;
 
-int not_reached = 0;
+int file_no = 0;
 
 char* memstr(char* buf, const char* needle, size_t buf_len)
 {
