@@ -12,9 +12,27 @@
 #include <unistd.h>
 #include <assert.h>
 
+#include <getopt.h>
+
 const int not_reached = 0;
 
 int file_no = 0;
+
+struct option opts[] = {
+	{ "help", no_argument, NULL, 'h' },
+	{ "version", no_argument, NULL, 'V' },
+
+	{ NULL, 0, NULL, 0 }
+};
+
+const char* opts_short = "hV";
+
+const char* help_msg = "Usage: %s [<options>] <file>...\n"
+	"\n"
+	"Options:\n"
+	" -h, --help            this help message\n"
+	" -V, --version         program version\n";
+
 
 char* memstr(char* buf, const char* needle, size_t buf_len)
 {
@@ -290,15 +308,32 @@ int process_file(FILE* f)
 
 int main(int argc, char* argv[])
 {
+	int opt;
 	int i;
 
-	if (argc < 2)
+	while ((opt = getopt_long(argc, argv, opts_short, opts, NULL)) != -1)
+	{
+		switch (opt)
+		{
+			case 'V':
+				printf("form-file-decoder 0\n");
+				return 0;
+			case 'h':
+				printf(help_msg, argv[0]);
+				return 0;
+			default:
+				printf(help_msg, argv[0]);
+				return 1;
+		}
+	}
+
+	if (argc - optind < 1)
 	{
 		fprintf(stderr, "Usage: %s <file>...\n", argv[0]);
 		return 1;
 	}
 
-	for (i = 1; i < argc; ++i)
+	for (i = optind; i < argc; ++i)
 	{
 		FILE* f;
 
