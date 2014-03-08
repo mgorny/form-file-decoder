@@ -139,6 +139,7 @@ int process_file(FILE* f)
 							return 1;
 						}
 						memcpy(fnbuf, p, len);
+						fnbuf[len] = 0;
 
 						/* find a unique name */
 						if (access(fnbuf, F_OK) == 0)
