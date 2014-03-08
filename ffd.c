@@ -18,9 +18,11 @@ const int not_reached = 0;
 
 int file_no = 0;
 int list_only = 0;
+const char* output_dir = ".";
 
 struct option opts[] = {
 	{ "list", no_argument, NULL, 'l' },
+	{ "output-dir", required_argument, NULL, 'o' },
 
 	{ "help", no_argument, NULL, 'h' },
 	{ "version", no_argument, NULL, 'V' },
@@ -28,15 +30,16 @@ struct option opts[] = {
 	{ NULL, 0, NULL, 0 }
 };
 
-const char* opts_short = "lhV";
+const char* opts_short = "lo:hV";
 
 const char* help_msg = "Usage: %s [<options>] <file>...\n"
 	"\n"
 	"Options:\n"
-	" -l, --list            list files without extracting them\n"
+	" -l, --list             list files without extracting them\n"
+	" -o, --output-dir <DIR> store output files in specified directory\n"
 	"\n"
-	" -h, --help            this help message\n"
-	" -V, --version         program version\n";
+	" -h, --help             this help message\n"
+	" -V, --version          program version\n";
 
 
 char* memstr(char* buf, const char* needle, size_t buf_len)
@@ -146,12 +149,31 @@ int process_file(FILE* f)
 				if (!p)
 				{
 					/* no filename, use number instead */
-					char fnbuf[20];
-					sprintf(fnbuf, "unnamed.%08x", file_no++);
+					char* fnbuf = malloc(strlen(output_dir) + 1 + 8 + 8 + 1);
+					if (!fnbuf)
+					{
+						fprintf(stderr, "malloc() for fnbuf failed: %s\n",
+								strerror(errno));
+						return 1;
+					}
+
+					sprintf(fnbuf, "%s/unnamed.%08x", output_dir, file_no++);
 
 					fprintf(stderr, "%s ...", fnbuf);
 					if (!list_only)
+					{
 						outf = fopen(fnbuf, "wb");
+
+						if (!outf)
+						{
+							fprintf(stderr, "\nUnable to open %s for writing: %s\n",
+									fnbuf, strerror(errno));
+							free(fnbuf);
+							return 1;
+						}
+					}
+
+					free(fnbuf);
 				}
 				else
 				{
@@ -164,19 +186,19 @@ int process_file(FILE* f)
 						no_output = 1;
 					else
 					{
-						fnbuf = malloc(len + 10);
+						fnbuf = malloc(strlen(output_dir) + 1 + len + 10);
 						if (!fnbuf)
 						{
-							fprintf(stderr, "malloc(%d) failed.\n", len+10);
+							fprintf(stderr, "malloc() for fnbuf failed.\n");
 							return 1;
 						}
-						memcpy(fnbuf, p, len);
-						fnbuf[len] = 0;
+						sprintf(fnbuf, "%s/", output_dir);
+						strncat(fnbuf, p, len);
 
 						/* find a unique name */
 						if (!list_only && access(fnbuf, F_OK) == 0)
 						{
-							char* post_fnbuf = fnbuf + len;
+							char* post_fnbuf = fnbuf + strlen(fnbuf);
 							int i = 0;
 
 							do
@@ -188,7 +210,17 @@ int process_file(FILE* f)
 
 						fprintf(stderr, "%s ...", fnbuf);
 						if (!list_only)
+						{
 							outf = fopen(fnbuf, "wb");
+
+							if (!outf)
+							{
+								fprintf(stderr, "\nUnable to open %s for writing: %s\n",
+										fnbuf, strerror(errno));
+								free(fnbuf);
+								return 1;
+							}
+						}
 
 						free(fnbuf);
 					}
@@ -201,19 +233,19 @@ int process_file(FILE* f)
 			}
 			else if (!strncasecmp(buf, "content-transfer-encoding:", 26))
 			{
-				fprintf(stderr, "Unsupported %s", buf);
+				fprintf(stderr, "\nUnsupported %s", buf);
 				return 1;
 			}
 			else
 			{
-				fprintf(stderr, "Unknown header: %s", buf);
+				fprintf(stderr, "\nUnknown header: %s", buf);
 				return 1;
 			}
 		}
 
 		if (!had_content_disposition)
 		{
-			fprintf(stderr, "No Content-Disposition, invalid file.\n");
+			fprintf(stderr, "\nNo Content-Disposition, invalid file.\n");
 			return 1;
 		}
 
@@ -229,7 +261,7 @@ int process_file(FILE* f)
 
 			if (ferror(f))
 			{
-				fprintf(stderr, "Read error: %s\n", strerror(errno));
+				fprintf(stderr, "\nRead error: %s\n", strerror(errno));
 				if (!no_output && !list_only)
 					fclose(outf);
 				return 1;
@@ -253,7 +285,7 @@ int process_file(FILE* f)
 			{
 				if (no_output)
 				{
-					fprintf(stderr, "Non-empty data when empty file expected\n");
+					fprintf(stderr, "\nNon-empty data when empty file expected\n");
 					return 1;
 				}
 
@@ -263,7 +295,7 @@ int process_file(FILE* f)
 					wr = fwrite(buf, 1, wn, outf);
 					if (wr == 0)
 					{
-						fprintf(stderr, "fwrite() failed: %s\n", strerror(errno));
+						fprintf(stderr, "\nfwrite() failed: %s\n", strerror(errno));
 						return 1;
 					}
 				}
@@ -281,7 +313,7 @@ int process_file(FILE* f)
 			{
 				if (fseek(f, -buf_filled + 2, SEEK_CUR) != 0)
 				{
-					fprintf(stderr, "fseek() failed: %s\n",
+					fprintf(stderr, "\nfseek() failed: %s\n",
 							strerror(errno));
 					if (!no_output && !list_only)
 						fclose(outf);
@@ -335,6 +367,9 @@ int main(int argc, char* argv[])
 			case 'l':
 				list_only = 1;
 				break;
+			case 'o':
+				output_dir = optarg;
+				break;
 
 			case 'V':
 				printf("form-file-decoder 0\n");
@@ -346,6 +381,13 @@ int main(int argc, char* argv[])
 				printf(help_msg, argv[0]);
 				return 1;
 		}
+	}
+
+	if (access(output_dir, W_OK) != 0)
+	{
+		fprintf(stderr, "Output directory not writable: %s\n",
+				strerror(errno));
+		return 1;
 	}
 
 	if (argc - optind < 1)
